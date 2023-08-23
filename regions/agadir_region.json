@@ -1,0 +1,8 @@
+{
+    "northeast":{"lat":30.440772,"lng":-9.476918},
+    "southwest":{"lat":30.381987,"lng":-9.633909},
+    "fuel_consumption_per_m":0.001,
+    "full_fuel":50,
+    "fuel_cost":20,
+    "trip_cost_per_m":0.005
+}
