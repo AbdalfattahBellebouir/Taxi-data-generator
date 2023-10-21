@@ -90,7 +90,7 @@ def main():
             sleep(random.uniform(20,40))
     elif os.getenv('DATA_SOURCE')=='db':
         lines = []
-        with open('trips.jsonl') as f:
+        with open(f"{os.getenv('REGION')}.jsonl") as f:
             for i in f:
                 lines.append(i)
         
