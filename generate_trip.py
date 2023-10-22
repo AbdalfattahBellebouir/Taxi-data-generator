@@ -10,11 +10,9 @@ import redis
 from confluent_kafka import Producer
 
 def sending_or_saving_data(t,record,producer,kafka_topic):
-    if t=="file":
-        f = open(f"{os.getenv('REGION')}_{socket.gethostname()}.txt", "+a")
-        f.write(record)
-    elif t=='kafka':
-        return producer.produce(kafka_topic,key='taxi_data',value=record.replace('\n',''))
+    f = open(f"{os.getenv('REGION')}_{socket.gethostname()}.txt", "+a")
+    f.write(record)
+    return producer.produce(kafka_topic,key='taxi_data',value=record.replace('\n',''))
 
 def main():
     if os.getenv('DATA_SOURCE')=='auto':
