@@ -16,7 +16,7 @@ def sending_or_saving_data(t,record,producer,kafka_topic):
 
 def main():
     if os.getenv('DATA_SOURCE')=='auto':
-        r = redis.Redis(host=os.getenv('REDIS_HOST'), port=os.getenv('REDIS_PORT'), decode_responses=True)
+        r = redis.Redis(host=os.getenv('REDIS_HOST'), port=os.getenv('REDIS_PORT'),username=os.getenv('REDIS_USER') ,password=os.getenv('REDIS_PASS'), decode_responses=True)
 
         data_region_file = 'regions/'+os.getenv('REGION')+'_region.json'
         print('Region selected:', os.getenv('REGION'))
