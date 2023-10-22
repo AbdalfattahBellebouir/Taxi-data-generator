@@ -1,14 +1,16 @@
-# FROM python:3-alpine
-FROM python:3.9
+FROM python:3.9.11-alpine3.15
+# FROM python:3.9
 
 WORKDIR /taxi
 COPY . .
-RUN apt-get update
-RUN apt-get install apk git make
-RUN apk add gcc libpq-dev && apk add musl-dev && apk add git && git clone https://github.com/edenhill/librdkafka.git && \
-  cd librdkafka && git checkout tags/v1.9.0 && \
-  ./configure && make && make install && \
-  cd ../ && rm -rf librdkafka
+RUN apk --no-cache upgrade \
+    && pip install --upgrade pip \
+    && apk --no-cache add tzdata build-base gcc libc-dev g++ make git bash
+
+RUN git clone https://github.com/edenhill/librdkafka.git && cd librdkafka \
+    && git checkout tags/v2.2.0 && ./configure --clean \
+    && ./configure --prefix /usr/local \
+    && make && make install
 
 RUN pip install --no-cache-dir -r requirements.txt
 
