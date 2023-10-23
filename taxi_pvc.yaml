@@ -1,0 +1,13 @@
+---
+apiVersion: apps/v1
+kind: PersistentVolumeClaim
+metadata:
+  name: taxi-pvc
+spec:
+  storageClassName: microk8s-hostpath
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 30Gi

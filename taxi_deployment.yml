@@ -1,0 +1,40 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: taxi-region
+  labels:
+    app: taxi-region
+spec:
+  replicas: 10
+  selector:
+    matchLabels:
+      app: taxi-region
+  template:
+    metadata:
+      labels:
+        app: taxi-region
+    spec:
+      containers:
+      - name: taxi-region
+        image: abdalfattahbellebouir/taxi-data-generator:alpha-0.1
+        env:
+        - name: REGION
+          value: <region>
+        - name: REDIS_HOST
+          value: <redis_host>
+        - name: REDIS_PORT
+          value: <redis_port>
+        - name: REDIS_USER
+          value: <redis_user>
+        - name: REDIS_PASS
+          value: <redis_pass>
+        - name: DATA_SOURCE
+          value: <data_source>
+        volumeMounts:
+        - mountPath: "/taxi/data"
+          name: mypd
+      volumes:
+        - name: mypd
+          persistentVolumeClaim: 
+            claimName: taxi-pvc

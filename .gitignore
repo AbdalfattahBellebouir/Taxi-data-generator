@@ -1,1 +1,4 @@
 credentials.txt
+taxi_paris_deployment.yml
+taxi_agadir_deployment.yml
+taxi_london_deployment.yml
