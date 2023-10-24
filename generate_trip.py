@@ -12,7 +12,7 @@ from pymongo import MongoClient
 from bson import BSON
 
 def sending_or_saving_data(record,producer,kafka_topic,collection):
-    collection.insert_one(BSON.encode(record.replace('\n','')))
+    collection.insert_many([record.replace('\n','')])
     return producer.produce(kafka_topic,key='taxi_data',value=record.replace('\n',''))
 
 def main():
@@ -66,7 +66,7 @@ def main():
             # with open(f"data/trips_{socket.gethostname()}.jsonl",'+a',encoding='utf-8') as f:
             #     f.write(os.getenv('REGION')+','+origin+','+destination+','+str(response.json())+'\n')
             
-            taxi_raw_collection.insert_one(BSON.encode({"taxi_id":socket.gethostname(),"region":os.getenv('REGION'),"origin":origin,"destination":destination,"record":str(response.json())}))
+            taxi_raw_collection.insert_many([{"taxi_id":socket.gethostname(),"region":os.getenv('REGION'),"origin":origin,"destination":destination,"record":str(response.json())}])
 
             trip_id = uuid.uuid5(uuid.NAMESPACE_URL,datetime.datetime.now().__str__())
 
