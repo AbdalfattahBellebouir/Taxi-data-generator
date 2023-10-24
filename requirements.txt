@@ -1,3 +1,4 @@
 confluent_kafka==2.2.0
 Requests
 redis
+pymongo

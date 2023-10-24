@@ -8,10 +8,10 @@ import socket
 import os
 import redis
 from confluent_kafka import Producer
+from pymongo import MongoClient
 
-def sending_or_saving_data(record,producer,kafka_topic):
-    f = open(f"{os.getenv('REGION')}_{socket.gethostname()}.txt", "+a")
-    f.write(record)
+def sending_or_saving_data(record,producer,kafka_topic,collection):
+    collection.insert_one(record.replace('\n',''))
     return producer.produce(kafka_topic,key='taxi_data',value=record.replace('\n',''))
 
 def main():
@@ -22,6 +22,9 @@ def main():
         print('Region selected:', os.getenv('REGION'))
         region = os.getenv('REGION')
         
+        taxi_raw_collection = MongoClient(r.get('MONGO_URI'))[r.get('MONGO_DB')][r.get('MONGO_RAW_COLLECTION')]
+        taxi_collection = MongoClient(r.get('MONGO_URI'))[r.get('MONGO_DB')][r.get('MONGO_TAXI_COLLECTION')]
+
         kafka_broker = {'bootstrap.servers': r.get('KAFKA_BOOTSTRAP_SERVERS'),
                         'security.protocol':'SASL_SSL',
                         'sasl.mechanisms':'PLAIN',
@@ -58,27 +61,30 @@ def main():
             destination=f"{round(random.uniform(min_lat,max_lat),8)}%2C{round(random.uniform(min_lng,max_lng),8)}"
 
             response = requests.get(f"https://maps.googleapis.com/maps/api/directions/json?destination={destination}&origin={origin}&key={api_key}")
-            with open(f"data/trips_{socket.gethostname()}.jsonl",'+a',encoding='utf-8') as f:
-                f.write(os.getenv('REGION')+','+origin+','+destination+','+str(response.json())+'\n')
             
+            # with open(f"data/trips_{socket.gethostname()}.jsonl",'+a',encoding='utf-8') as f:
+            #     f.write(os.getenv('REGION')+','+origin+','+destination+','+str(response.json())+'\n')
+            
+            taxi_raw_collection.insert_one({"taxi_id":socket.gethostname(),"region":os.getenv('REGION'),"origin":origin,"destination":destination,"record":str(response.json())})
+
             trip_id = uuid.uuid5(uuid.NAMESPACE_URL,datetime.datetime.now().__str__())
 
             print(f'New trip {trip_id}')
 
             try:
-                sending_or_saving_data(f'START [TAXI_ID {socket.gethostname()}] [REGION {region}] [TRIP_ID {trip_id}] [{response.json()["routes"][0]["legs"][0]["start_location"]["lat"]},{response.json()["routes"][0]["legs"][0]["start_location"]["lng"]}] to [{response.json()["routes"][0]["legs"][0]["end_location"]["lat"]},{response.json()["routes"][0]["legs"][0]["end_location"]["lng"]}]\n',producer,kafka_topic)
+                sending_or_saving_data(f'START [TAXI_ID {socket.gethostname()}] [REGION {region}] [TRIP_ID {trip_id}] [{response.json()["routes"][0]["legs"][0]["start_location"]["lat"]},{response.json()["routes"][0]["legs"][0]["start_location"]["lng"]}] to [{response.json()["routes"][0]["legs"][0]["end_location"]["lat"]},{response.json()["routes"][0]["legs"][0]["end_location"]["lng"]}]\n',producer,kafka_topic,taxi_collection)
                 print(f'START [TAXI_ID {socket.gethostname()}] [REGION {region}] [TRIP_ID {trip_id}] [{response.json()["routes"][0]["legs"][0]["start_location"]["lat"]},{response.json()["routes"][0]["legs"][0]["start_location"]["lng"]}] to [{response.json()["routes"][0]["legs"][0]["end_location"]["lat"]},{response.json()["routes"][0]["legs"][0]["end_location"]["lng"]}]')
                 for s,i in enumerate(response.json()['routes'][0]['legs'][0]['steps']):
                     if available_fuel < i["distance"]["value"] * fuel_consumption_per_m:
-                        sending_or_saving_data(f'FUEL [TAXI_ID {socket.gethostname()}] [REGION {region}] [TRIP_ID {trip_id}] [COST {round((full_fuel - available_fuel)*fuel_cost)}]\n',producer,kafka_topic)
+                        sending_or_saving_data(f'FUEL [TAXI_ID {socket.gethostname()}] [REGION {region}] [TRIP_ID {trip_id}] [COST {round((full_fuel - available_fuel)*fuel_cost)}]\n',producer,kafka_topic,taxi_collection)
                         print(f'FUEL [TAXI_ID {socket.gethostname()}] [REGION {region}] [TRIP_ID {trip_id}] [COST {round((full_fuel - available_fuel)*fuel_cost)}]')
                         available_fuel = full_fuel
                     sleep(round(i['duration']['value']/60))
                     if s==len(response.json()['routes'][0]['legs'][0]['steps'])-1:
-                        sending_or_saving_data(f'END [TAXI_ID {socket.gethostname()}] [REGION {region}] [TRIP_ID {trip_id}] [DISTANCE_TRAVELLED {i["distance"]["value"]} meters] [REACHED {i["end_location"]["lat"]},{i["end_location"]["lng"]}] [DURATION {i["duration"]["value"]} seconds] [TOTAL_DISTANCE {response.json()["routes"][0]["legs"][0]["distance"]["value"]} meters] [COST {response.json()["routes"][0]["legs"][0]["distance"]["value"]*trip_cost_per_m}]\n',producer,kafka_topic)
+                        sending_or_saving_data(f'END [TAXI_ID {socket.gethostname()}] [REGION {region}] [TRIP_ID {trip_id}] [DISTANCE_TRAVELLED {i["distance"]["value"]} meters] [REACHED {i["end_location"]["lat"]},{i["end_location"]["lng"]}] [DURATION {i["duration"]["value"]} seconds] [TOTAL_DISTANCE {response.json()["routes"][0]["legs"][0]["distance"]["value"]} meters] [COST {response.json()["routes"][0]["legs"][0]["distance"]["value"]*trip_cost_per_m}]\n',producer,kafka_topic,taxi_collection)
                         print(f'END [TAXI_ID {socket.gethostname()}] [REGION {region}] [TRIP_ID {trip_id}] [DISTANCE_TRAVELLED {i["distance"]["value"]} meters] [REACHED {i["end_location"]["lat"]},{i["end_location"]["lng"]}] [DURATION {i["duration"]["value"]} seconds] [TOTAL_DISTANCE {response.json()["routes"][0]["legs"][0]["distance"]["value"]} meters] [COST {response.json()["routes"][0]["legs"][0]["distance"]["value"]*trip_cost_per_m}]')
                     else:
-                        sending_or_saving_data(f'WAYPOINT [TAXI_ID {socket.gethostname()}] [REGION {region}] [TRIP_ID {trip_id}] [DISTANCE_TRAVELLED {i["distance"]["value"]} meters]  [REACHED {i["end_location"]["lat"]},{i["end_location"]["lng"]}] [DURATION {i["duration"]["value"]} seconds]\n',producer,kafka_topic)
+                        sending_or_saving_data(f'WAYPOINT [TAXI_ID {socket.gethostname()}] [REGION {region}] [TRIP_ID {trip_id}] [DISTANCE_TRAVELLED {i["distance"]["value"]} meters]  [REACHED {i["end_location"]["lat"]},{i["end_location"]["lng"]}] [DURATION {i["duration"]["value"]} seconds]\n',producer,kafka_topic,taxi_collection)
                         print(f'WAYPOINT [TAXI_ID {socket.gethostname()}] [REGION {region}] [TRIP_ID {trip_id}] [DISTANCE_TRAVELLED {i["distance"]["value"]} meters]  [REACHED {i["end_location"]["lat"]},{i["end_location"]["lng"]}] [DURATION {i["duration"]["value"]} seconds]')
                     available_fuel -= i["distance"]["value"] * fuel_consumption_per_m
             except Exception as e:
@@ -103,19 +109,19 @@ def main():
             print(f'New trip {trip_id}')
 
             try:
-                sending_or_saving_data(f'START [TAXI_ID {socket.gethostname()}] [REGION {region}] [TRIP_ID {trip_id}] [{origin.split("%2C")[0]},{origin.split("%2C")[1]}] to [{destination.split("%2C")[0]},{destination.split("%2C")[1]}]\n',producer,kafka_topic)
+                sending_or_saving_data(f'START [TAXI_ID {socket.gethostname()}] [REGION {region}] [TRIP_ID {trip_id}] [{origin.split("%2C")[0]},{origin.split("%2C")[1]}] to [{destination.split("%2C")[0]},{destination.split("%2C")[1]}]\n',producer,kafka_topic,taxi_collection)
                 print(f'START [TAXI_ID {socket.gethostname()}] [REGION {region}] [TRIP_ID {trip_id}] [{origin.split("%2C")[0]},{origin.split("%2C")[1]}] to [{destination.split("%2C")[0]},{destination.split("%2C")[1]}]')
                 for s,i in enumerate(response['routes'][0]['legs'][0]['steps']):
                     if available_fuel < i["distance"]["value"] * fuel_consumption_per_m:
-                        sending_or_saving_data(f'FUEL [TAXI_ID {socket.gethostname()}] [REGION {region}] [TRIP_ID {trip_id}] [COST {round((full_fuel - available_fuel)*fuel_cost)}]\n',producer,kafka_topic)
+                        sending_or_saving_data(f'FUEL [TAXI_ID {socket.gethostname()}] [REGION {region}] [TRIP_ID {trip_id}] [COST {round((full_fuel - available_fuel)*fuel_cost)}]\n',producer,kafka_topic,taxi_collection)
                         print(f'FUEL [TAXI_ID {socket.gethostname()}] [REGION {region}] [TRIP_ID {trip_id}] [COST {round((full_fuel - available_fuel)*fuel_cost)}]')
                         available_fuel = full_fuel
                     sleep(round(i['duration']['value']/60))
                     if s==len(response['routes'][0]['legs'][0]['steps'])-1:
-                        sending_or_saving_data(f'END [TAXI_ID {socket.gethostname()}] [REGION {region}] [TRIP_ID {trip_id}] [DISTANCE_TRAVELLED {i["distance"]["value"]} meters] [REACHED {i["end_location"]["lat"]},{i["end_location"]["lng"]}] [DURATION {i["duration"]["value"]} seconds] [TOTAL_DISTANCE {response["routes"][0]["legs"][0]["distance"]["value"]} meters] [COST {response["routes"][0]["legs"][0]["distance"]["value"]*trip_cost_per_m}]\n',producer,kafka_topic)
+                        sending_or_saving_data(f'END [TAXI_ID {socket.gethostname()}] [REGION {region}] [TRIP_ID {trip_id}] [DISTANCE_TRAVELLED {i["distance"]["value"]} meters] [REACHED {i["end_location"]["lat"]},{i["end_location"]["lng"]}] [DURATION {i["duration"]["value"]} seconds] [TOTAL_DISTANCE {response["routes"][0]["legs"][0]["distance"]["value"]} meters] [COST {response["routes"][0]["legs"][0]["distance"]["value"]*trip_cost_per_m}]\n',producer,kafka_topic,taxi_collection)
                         print(f'END [TAXI_ID {socket.gethostname()}] [REGION {region}] [TRIP_ID {trip_id}] [DISTANCE_TRAVELLED {i["distance"]["value"]} meters] [REACHED {i["end_location"]["lat"]},{i["end_location"]["lng"]}] [DURATION {i["duration"]["value"]} seconds] [TOTAL_DISTANCE {response["routes"][0]["legs"][0]["distance"]["value"]} meters] [COST {response["routes"][0]["legs"][0]["distance"]["value"]*trip_cost_per_m}]')
                     else:
-                        sending_or_saving_data(f'WAYPOINT [TAXI_ID {socket.gethostname()}] [REGION {region}] [TRIP_ID {trip_id}] [DISTANCE_TRAVELLED {i["distance"]["value"]} meters]  [REACHED {i["end_location"]["lat"]},{i["end_location"]["lng"]}] [DURATION {i["duration"]["value"]} seconds]\n',producer,kafka_topic)
+                        sending_or_saving_data(f'WAYPOINT [TAXI_ID {socket.gethostname()}] [REGION {region}] [TRIP_ID {trip_id}] [DISTANCE_TRAVELLED {i["distance"]["value"]} meters]  [REACHED {i["end_location"]["lat"]},{i["end_location"]["lng"]}] [DURATION {i["duration"]["value"]} seconds]\n',producer,kafka_topic,taxi_collection)
                         print(f'WAYPOINT [TAXI_ID {socket.gethostname()}] [REGION {region}] [TRIP_ID {trip_id}] [DISTANCE_TRAVELLED {i["distance"]["value"]} meters]  [REACHED {i["end_location"]["lat"]},{i["end_location"]["lng"]}] [DURATION {i["duration"]["value"]} seconds]')
                     available_fuel -= i["distance"]["value"] * fuel_consumption_per_m
             except Exception as e:
