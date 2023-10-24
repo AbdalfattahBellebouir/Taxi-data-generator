@@ -12,7 +12,7 @@ from pymongo import MongoClient
 from bson import BSON
 
 def sending_or_saving_data(record,producer,kafka_topic,collection):
-    collection.insert_many([record.replace('\n','')])
+    collection.insert_many([{'record':record.replace('\n','')}])
     return producer.produce(kafka_topic,key='taxi_data',value=record.replace('\n',''))
 
 def main():
