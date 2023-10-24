@@ -65,7 +65,7 @@ def main():
             # with open(f"data/trips_{socket.gethostname()}.jsonl",'+a',encoding='utf-8') as f:
             #     f.write(os.getenv('REGION')+','+origin+','+destination+','+str(response.json())+'\n')
             
-            taxi_raw_collection.insert_one(str({"taxi_id":socket.gethostname(),"region":os.getenv('REGION'),"origin":origin,"destination":destination,"record":response.json()}))
+            taxi_raw_collection.insert_one({"taxi_id":socket.gethostname(),"region":os.getenv('REGION'),"origin":origin,"destination":destination,"record":response.json()})
 
             trip_id = uuid.uuid5(uuid.NAMESPACE_URL,datetime.datetime.now().__str__())
 
